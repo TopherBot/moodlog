@@ -1,0 +1,45 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  lint-test:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python (using uv)
+        uses: astral-sh/setup-uv@v1
+        with:
+          version: "0.4.x"
+
+      - name: Install project (with dev deps)
+        run: |
+          uv sync --all-extras
+
+      - name: Lint with ruff (check mode)
+        run: uv run ruff check .
+
+      - name: Run tests with coverage
+        run: uv run pytest --cov=moodlog --cov-report=term-missing
+
+      - name: Upload coverage to Codecov (optional)
+        if: always()
+        uses: codecov/codecov-action@v4
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+
+      - name: Verify no stray large files
+        run: |
+          if git rev-list --objects --all | git cat-file --batch-check='%(objecttype) %(objectname) %(objectsize) %(rest)' | awk '$3 > 1048576 {print $0}' | grep .; then
+            echo "Found files > 1 MiB. Fail CI." && exit 1;
+          else
+            echo "All tracked files are under 1 MiB.";
+          fi
